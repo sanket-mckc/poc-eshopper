@@ -1,35 +1,31 @@
 from flask import Flask, request, jsonify
-import os
 from openai import OpenAI
+import os
 
 app = Flask(__name__)
 
-# Set your OpenAI API key
-openai_api_key = os.environ["OPENAI_API_KEY"]
-client = OpenAI(api_key=openai_api_key)
+# Set your OpenAI API key here
+client = OpenAI()
+client.api_key = os.environ["OPENAI_API_KEY"]
 
-@app.route("/chat", methods=["POST"])
-def chat():
-    try:
-        data = request.get_json()
-        user_input = data.get("message")
+def get_sales_assistant_response(user_input):
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are furniture salesman working in the industry for more than 10+ years. Your job is to understand customer requests and suggest the best possible product/options to them out of the options available to you"},
+            {"role": "user", "content": user_input},
+        ]
+    )
+    return response
 
-        if not user_input:
-            return jsonify({"error": "No message provided"}), 400
+@app.route('/sales-assistant', methods=['POST'])
+def sales_assistant():
+    user_input = request.json.get('input')
+    if not user_input:
+        return jsonify({"error": "No input provided"}), 400
+    
+    response = get_sales_assistant_response(user_input)
+    return response.to_json()   
 
-        chat_history = [{"role": "system", "content": "You are a helpful salesman. Recommend products to customers."}]
-        chat_history.append({"role": "user", "content": user_input})
-
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=chat_history,
-            max_tokens=1024
-        )
-
-        return jsonify({"response": response.choices[0].message.content})
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run(debug=True)
