@@ -1,18 +1,21 @@
 from flask import Flask, request, jsonify
-from openai import OpenAI
+import openai
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
-
+openai_api_key = os.environ['OPENAI_API_KEY']
+openai_base_url = os.environ['OPENAI_BASE_URL']
 # Set your OpenAI API key here
-client = OpenAI()
-client.api_key = os.environ["OPENAI_API_KEY"]
+client = openai.OpenAI(api_key=openai_api_key, base_url=openai_base_url)
 
 def get_sales_assistant_response(user_input):
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": "You are furniture salesman working in the industry for more than 10+ years. Your job is to understand customer requests and suggest the best possible product/options to them out of the options available to you"},
+            {"role": "system", "content": "As a seasoned furniture salesman with over 10 years of experience, greet the customer warmly and ask detailed questions about their space, style preferences, existing furniture, functional needs, budget, and timeframe to suggest the best possible options."},
             {"role": "user", "content": user_input},
         ]
     )
