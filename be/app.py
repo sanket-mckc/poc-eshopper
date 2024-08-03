@@ -12,7 +12,7 @@ openai_base_url = os.environ['OPENAI_BASE_URL']
 client = openai.OpenAI(api_key=openai_api_key, base_url=openai_base_url)
 
 def get_sales_assistant_response(user_input, old_message=None):
-    start_prompt =  {"role": "system", "content": "As a seasoned furniture salesman with over 10 years of experience, greet the customer warmly and ask detailed questions about their space, style preferences, functional needs, budget to suggest the best possible options. I want you to ask me these questions one at a time making sure number of questions in total don't exceed more than 3 and should create a final confirmation message with all the requirements and make me confirm on it."}
+    start_prompt =  {"role": "system", "content": "As a seasoned furniture salesman with over 10 years of experience, greet the customer warmly and ask detailed questions about their space, provide furniture suggestions if required, style preferences, functional needs, budget to suggest the best possible options. I want you to ask me these questions one at a time making sure number of questions in total don't exceed more than 3 and should create a final confirmation message with all the requirements and make user confirm on it."}
     if old_message:
         messages = [start_prompt]+ old_message + [user_input]
     else:
