@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import openai
 import os
 from dotenv import load_dotenv
+from flask_cors import cross_origin
 
 load_dotenv()
 
@@ -28,14 +29,22 @@ def get_sales_assistant_response(user_input, old_message=None):
     return response
 
 @app.route('/sales-assistant', methods=['POST'])
+@cross_origin()
 def sales_assistant():
+    if request.method == 'OPTIONS':
+        # Handle CORS preflight requests
+        return jsonify({"status": "ok"}), 200
+
     user_input = request.json.get('input')
     if not user_input:
         return jsonify({"error": "No input provided"}), 400
     old_message = request.json.get('old_message')
     
     response = get_sales_assistant_response(user_input, old_message)
-    return response.to_json()   
+    return response.to_json()
 
-if __name__ == '__main__':
-    app.run(debug=True)
+# if __name__ == '__main__':
+#     app.run(debug=True)
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5002, debug=True)

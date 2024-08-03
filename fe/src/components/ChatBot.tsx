@@ -1,20 +1,22 @@
 import React, { useState, ChangeEvent } from 'react';
-
-interface Message {
-  role: 'bot' | 'user';
-  text: string;
-}
+import { useChat } from '../context/ChatContext';
+import { Message } from '../types';
+import { getFollowUpQuestion } from '../services/api';
 
 const Chatbot: React.FC = () => {
-  const botFirstMessage: Message = {
-    role: 'bot',
-    text: 'What would you like to shop for today?',
-  };
-  const [messages, setMessages] = useState<Message[]>([botFirstMessage]);
+  const { messages, addMessage } = useChat();
   const [input, setInput] = useState<string>('');
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     setInput(e.target.value);
+  };
+
+  const sendChatToTheBackend = async (newMessage: Message) => {
+    const backendResponse = await getFollowUpQuestion({
+      "old_message": messages,
+      "input": newMessage,
+    });
+    addMessage(backendResponse.choices[0].message);
   };
 
   const handleSendMessage = () => {
@@ -22,10 +24,11 @@ const Chatbot: React.FC = () => {
 
     const newMessage: Message = {
       role: 'user',
-      text: input,
+      content: input,
     };
 
-    setMessages([...messages, newMessage]);
+    addMessage(newMessage);
+    sendChatToTheBackend(newMessage);
     setInput('');
   };
 
@@ -36,12 +39,11 @@ const Chatbot: React.FC = () => {
         <div className="flex flex-col flex-grow overflow-y-auto h-80 border-b-2 mb-4">
           {messages.map((message) => (
             <div
-              key={message.text}
-              className={`p-2 my-2 rounded-md ${
-                message.role === 'bot' ? 'bg-blue-100 self-start' : 'bg-green-100 self-end'
-              }`}
+              key={message.content}
+              className={`p-2 my-2 rounded-md ${message.role === 'assistant' ? 'bg-blue-100 self-start' : 'bg-green-100 self-end'
+                }`}
             >
-              {message.text}
+              {message.content}
             </div>
           ))}
         </div>
