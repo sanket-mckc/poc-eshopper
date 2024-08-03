@@ -1,0 +1,10 @@
+argparse
+langchain>=0.0.231
+langchain-community   
+langchain-mongodb
+lxml
+pymongo
+requests
+bs4
+openai
+tiktoken
