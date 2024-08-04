@@ -21,7 +21,7 @@ def download_image(url):
     image_data = BytesIO(response.content)
     return Image.open(image_data)
 
-def create_collage(images, title):
+def create_collage(images, title, colors):
     collage_width = 1000
     collage_height = 1400
     collage_image = Image.new('RGB', (collage_width, collage_height), color=(255, 255, 255))
@@ -38,8 +38,7 @@ def create_collage(images, title):
     text_height = text_bbox[3] - text_bbox[1]
     draw.text(((collage_width - text_width) / 2, 20), title_text, fill="black", font=font)
 
-    # Add color circles
-    colors = ['#A52A2A', '#FFC0CB', '#B0C4DE']
+    # Add color circles using the colors from the items
     circle_diameter = 60
     circle_positions = [(240, 80), (440, 80), (640, 80)]
     for color, pos in zip(colors, circle_positions):
@@ -83,6 +82,7 @@ def download_images():
     for option in options:
         items = option.get('items', [])
         image_urls = [item['url'] for item in items]
+        colors = [item['color_hex_code'] for item in items[:3]]  # Get the first 3 colors
         if not image_urls:
             continue
 
@@ -97,7 +97,7 @@ def download_images():
                 return jsonify({"error": f"Failed to download image from {url}: {str(e)}"}), 500
 
         title = "Collage for Option"
-        collage_base64 = create_collage(downloaded_images, title)
+        collage_base64 = create_collage(downloaded_images, title, colors)
         if collage_base64 is None:
             return jsonify({"error": "Failed to create collage"}), 500
 
