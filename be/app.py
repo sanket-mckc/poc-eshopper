@@ -1,4 +1,5 @@
-from flask import Flask, request, jsonify, send_file
+import base64
+from flask import Flask, request, jsonify, send_file, url_for
 import requests
 from io import BytesIO
 import openai
@@ -12,7 +13,6 @@ load_dotenv()
 app = Flask(__name__)
 openai_api_key = os.environ['OPENAI_API_KEY']
 openai_base_url = os.environ['OPENAI_BASE_URL']
-# Set your OpenAI API key here
 client = openai.OpenAI(api_key=openai_api_key, base_url=openai_base_url)
 
 def download_image(url):
@@ -21,20 +21,18 @@ def download_image(url):
     image_data = BytesIO(response.content)
     return Image.open(image_data)
 
-def create_collage(images):
-    # Define the size of the collage
+def create_collage(images, title):
     collage_width = 1000
     collage_height = 1400
     collage_image = Image.new('RGB', (collage_width, collage_height), color=(255, 255, 255))
 
-    # Add title text
     draw = ImageDraw.Draw(collage_image)
     try:
         font = ImageFont.truetype("arial.ttf", 40)
     except IOError:
         font = ImageFont.load_default()
 
-    title_text = "minimalistic interior design inspo"
+    title_text = title
     text_bbox = draw.textbbox((0, 0), title_text, font=font)
     text_width = text_bbox[2] - text_bbox[0]
     text_height = text_bbox[3] - text_bbox[1]
@@ -48,9 +46,8 @@ def create_collage(images):
         draw.ellipse([pos, (pos[0] + circle_diameter, pos[1] + circle_diameter)], fill=color)
 
     num_images = len(images)
-    # Define the grid size based on the number of images
     rows = (num_images + 1) // 2
-    image_width = (collage_width - 80) // 2
+    image_width = (collage_width - 120) // 2  # Adjusted to account for the right margin
     image_height = (collage_height - (rows + 1) * 40 - 200) // rows
 
     positions = []
@@ -61,7 +58,6 @@ def create_collage(images):
                 y = 200 + row * (image_height + 40)
                 positions.append((x, y))
 
-    # Resize images to be the same size and paste them into the collage
     for index, (img, pos) in enumerate(zip(images, positions)):
         img_resized = img.resize((image_width, image_height), Image.LANCZOS)
         collage_image.paste(img_resized, pos)
@@ -70,32 +66,45 @@ def create_collage(images):
     collage_image.save(collage_io, format='JPEG')
     collage_io.seek(0)
 
-    return collage_io
+    # Convert to Base64
+    collage_base64 = base64.b64encode(collage_io.getvalue()).decode('utf-8')
+
+    return collage_base64
 
 @app.route('/download-images', methods=['POST'])
 @cross_origin()
 def download_images():
-    image_urls = request.json.get('image_urls')
-    if not image_urls or not isinstance(image_urls, list):
-        return jsonify({"error": "Invalid or missing 'image_urls'"}), 400
+    options = request.json.get('options')
+    if not options or not isinstance(options, list):
+        return jsonify({"error": "Invalid or missing 'options'"}), 400
 
-    downloaded_images = []
-    for url in image_urls:
-        try:
-            image = download_image(url)
-            # Convert WebP to PNG if necessary
-            if image.format == "WEBP":
-                image = image.convert("RGBA")
-            downloaded_images.append(image)
-        except Exception as e:
-            return jsonify({"error": f"Failed to download image from {url}: {str(e)}"}), 500
+    updated_options = []
 
-    # Create a collage from the downloaded images
-    collage = create_collage(downloaded_images)
-    if collage is None:
-        return jsonify({"error": "Failed to create collage"}), 500
+    for option in options:
+        items = option.get('items', [])
+        image_urls = [item['url'] for item in items]
+        if not image_urls:
+            continue
 
-    return send_file(collage, mimetype='image/jpeg', as_attachment=True, download_name='collage.jpg')
+        downloaded_images = []
+        for url in image_urls:
+            try:
+                image = download_image(url)
+                if image.format == "WEBP":
+                    image = image.convert("RGBA")
+                downloaded_images.append(image)
+            except Exception as e:
+                return jsonify({"error": f"Failed to download image from {url}: {str(e)}"}), 500
+
+        title = "Collage for Option"
+        collage_base64 = create_collage(downloaded_images, title)
+        if collage_base64 is None:
+            return jsonify({"error": "Failed to create collage"}), 500
+
+        option['collage_image_base64'] = collage_base64
+        updated_options.append(option)
+
+    return jsonify({"options": updated_options})
 
 def get_sales_assistant_response(user_input, old_message=None):
     start_prompt =  {"role": "system", "content": "As a seasoned furniture salesman with over 10 years of experience, greet the customer warmly and ask detailed questions about their space, provide furniture suggestions if required, style preferences, functional needs, budget to suggest the best possible options. I want you to ask me these questions one at a time making sure number of questions in total don't exceed more than 3 and should create a final confirmation message with all the requirements and make user confirm on it. Make sure the final confirmation message has room, style, furnitures and budget"}
@@ -117,7 +126,6 @@ def get_sales_assistant_response(user_input, old_message=None):
 @cross_origin()
 def sales_assistant():
     if request.method == 'OPTIONS':
-        # Handle CORS preflight requests
         return jsonify({"status": "ok"}), 200
 
     user_input = request.json.get('input')
