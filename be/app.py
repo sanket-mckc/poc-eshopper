@@ -5,7 +5,7 @@ import openai
 import os
 from dotenv import load_dotenv
 from flask_cors import cross_origin
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 load_dotenv()
 
@@ -19,37 +19,52 @@ def download_image(url):
     response = requests.get(url)
     response.raise_for_status()
     image_data = BytesIO(response.content)
-    return image_data
+    return Image.open(image_data)
 
 def create_collage(images):
     # Define the size of the collage
-    collage_width = 800
-    collage_height = 600
+    collage_width = 1000
+    collage_height = 1400
     collage_image = Image.new('RGB', (collage_width, collage_height), color=(255, 255, 255))
 
-    # Calculate the size of each image in the collage
+    # Add title text
+    draw = ImageDraw.Draw(collage_image)
+    try:
+        font = ImageFont.truetype("arial.ttf", 40)
+    except IOError:
+        font = ImageFont.load_default()
+
+    title_text = "minimalistic interior design inspo"
+    text_bbox = draw.textbbox((0, 0), title_text, font=font)
+    text_width = text_bbox[2] - text_bbox[0]
+    text_height = text_bbox[3] - text_bbox[1]
+    draw.text(((collage_width - text_width) / 2, 20), title_text, fill="black", font=font)
+
+    # Add color circles
+    colors = ['#A52A2A', '#FFC0CB', '#B0C4DE']
+    circle_diameter = 60
+    circle_positions = [(240, 80), (440, 80), (640, 80)]
+    for color, pos in zip(colors, circle_positions):
+        draw.ellipse([pos, (pos[0] + circle_diameter, pos[1] + circle_diameter)], fill=color)
+
     num_images = len(images)
-    if num_images == 0:
-        return None
+    # Define the grid size based on the number of images
+    rows = (num_images + 1) // 2
+    image_width = (collage_width - 80) // 2
+    image_height = (collage_height - (rows + 1) * 40 - 200) // rows
 
-    rows = cols = int(num_images ** 0.5)
-    if rows * cols < num_images:
-        cols += 1
-    if rows * cols < num_images:
-        rows += 1
+    positions = []
+    for row in range(rows):
+        for col in range(2):
+            if len(positions) < num_images:
+                x = 40 + col * (image_width + 40)
+                y = 200 + row * (image_height + 40)
+                positions.append((x, y))
 
-    image_width = collage_width // cols
-    image_height = collage_height // rows
-
-    # Paste images into the collage
-    for index, image in enumerate(images):
-        img = Image.open(image)
-        img.thumbnail((image_width, image_height))
-
-        x = (index % cols) * image_width
-        y = (index // cols) * image_height
-
-        collage_image.paste(img, (x, y))
+    # Resize images to be the same size and paste them into the collage
+    for index, (img, pos) in enumerate(zip(images, positions)):
+        img_resized = img.resize((image_width, image_height), Image.LANCZOS)
+        collage_image.paste(img_resized, pos)
 
     collage_io = BytesIO()
     collage_image.save(collage_io, format='JPEG')
@@ -67,8 +82,11 @@ def download_images():
     downloaded_images = []
     for url in image_urls:
         try:
-            image_data = download_image(url)
-            downloaded_images.append(image_data)
+            image = download_image(url)
+            # Convert WebP to PNG if necessary
+            if image.format == "WEBP":
+                image = image.convert("RGBA")
+            downloaded_images.append(image)
         except Exception as e:
             return jsonify({"error": f"Failed to download image from {url}: {str(e)}"}), 500
 
@@ -78,7 +96,6 @@ def download_images():
         return jsonify({"error": "Failed to create collage"}), 500
 
     return send_file(collage, mimetype='image/jpeg', as_attachment=True, download_name='collage.jpg')
-
 
 def get_sales_assistant_response(user_input, old_message=None):
     start_prompt =  {"role": "system", "content": "As a seasoned furniture salesman with over 10 years of experience, greet the customer warmly and ask detailed questions about their space, provide furniture suggestions if required, style preferences, functional needs, budget to suggest the best possible options. I want you to ask me these questions one at a time making sure number of questions in total don't exceed more than 3 and should create a final confirmation message with all the requirements and make user confirm on it. Make sure the final confirmation message has room, style, furnitures and budget"}
